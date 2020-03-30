@@ -44,6 +44,8 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 
 import java.io.IOException;
@@ -51,7 +53,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -77,6 +78,7 @@ class UpgradeTest extends TestBase implements ITestIsolatedStandard {
     private String infraNamespace;
     private EnmasseInstallType type;
     private OLMInstallationType olmType;
+    private OperatorManager operatorManager = OperatorManager.getInstance();
 
     @BeforeAll
     void prepareUpgradeEnv() throws Exception {
@@ -92,7 +94,7 @@ class UpgradeTest extends TestBase implements ITestIsolatedStandard {
         }
         boolean waitForNamespace = true;
         if (this.type.equals(EnmasseInstallType.BUNDLE)) {
-            assertTrue(OperatorManager.getInstance().clean());
+            assertTrue(operatorManager.clean());
         } else if (this.type.equals(EnmasseInstallType.OLM)) {
             if (OperatorManager.getInstance().isEnmasseOlmDeployed()) {
                 for (var addrSpace : kubernetes.getAddressSpaceClient(infraNamespace).list().getItems()) {
@@ -105,12 +107,12 @@ class UpgradeTest extends TestBase implements ITestIsolatedStandard {
                     }
                 }
             }
-            assertTrue(OperatorManager.getInstance().removeOlm());
+            assertTrue(operatorManager.removeOlm());
             if (olmType != null && olmType == OLMInstallationType.DEFAULT) {
                 waitForNamespace = false;
             }
         } else {
-            OperatorManager.getInstance().deleteEnmasseAnsible();
+            operatorManager.deleteEnmasseAnsible();
         }
         if (waitForNamespace) {
             TestUtils.waitForNamespaceDeleted(kubernetes, infraNamespace);
@@ -140,7 +142,7 @@ class UpgradeTest extends TestBase implements ITestIsolatedStandard {
     void testUpgradeOLMSpecific(String version, String templates) throws Exception {
         this.type = EnmasseInstallType.OLM;
         this.olmType = OLMInstallationType.SPECIFIC;
-        this.infraNamespace = OperatorManager.getInstance().getNamespaceByOlmInstallationType(olmType);
+        this.infraNamespace = operatorManager.getNamespaceByOlmInstallationType(olmType);
         doTestUpgrade(templates, version);
     }
 
@@ -150,7 +152,7 @@ class UpgradeTest extends TestBase implements ITestIsolatedStandard {
     void testUpgradeOLMDefault(String version, String templates) throws Exception {
         this.type = EnmasseInstallType.OLM;
         this.olmType = OLMInstallationType.DEFAULT;
-        this.infraNamespace = OperatorManager.getInstance().getNamespaceByOlmInstallationType(olmType);
+        this.infraNamespace = operatorManager.getNamespaceByOlmInstallationType(olmType);
         doTestUpgrade(templates, version);
     }
 
@@ -428,37 +430,9 @@ class UpgradeTest extends TestBase implements ITestIsolatedStandard {
     }
 
     private void installEnmasseOLM(Path templateDir, String version) throws Exception {
-
-        if (olmType == OLMInstallationType.SPECIFIC) {
-            kubernetes.createNamespace(infraNamespace, Collections.singletonMap("allowed", "true"));
-        }
-
-        String catalogSourceName;
-        String catalogNamespace;
-        if (version.startsWith("0.30")) {
-            catalogSourceName = "community-operators";
-            catalogNamespace = "openshift-marketplace";
-        } else {
-            catalogSourceName = "enmasse-source";
-            catalogNamespace = infraNamespace;
-
-            String customRegistryImageToUse = buildPushCustomOperatorRegistry(catalogNamespace, templateDir, version);
-
-            deployCatalogSource(catalogSourceName, catalogNamespace, customRegistryImageToUse);
-        }
-
-        if (olmType == OLMInstallationType.SPECIFIC) {
-            Path operatorGroupFile = Files.createTempFile("operatorgroup", ".yaml");
-            String operatorGroup = Files.readString(Paths.get("custom-operator-registry", "operator-group.yaml"));
-            Files.writeString(operatorGroupFile, operatorGroup.replaceAll("\\$\\{OPERATOR_NAMESPACE}", infraNamespace));
-            KubeCMDClient.applyFromFile(infraNamespace, operatorGroupFile);
-        }
-
+        String manifestsImage = getManifestsImage(templateDir, version);
         String csvName = getCsvName(templateDir, version);
-
-        applySubscription(infraNamespace, catalogSourceName, catalogNamespace, csvName);
-
-        TestUtils.waitForPodReady("enmasse-operator", infraNamespace);
+        operatorManager.olm().install(olmType, manifestsImage, csvName);
 
         Thread.sleep(30_000);
 
@@ -466,75 +440,43 @@ class UpgradeTest extends TestBase implements ITestIsolatedStandard {
         KubeCMDClient.applyFromFile(infraNamespace, Paths.get(templateDir.toString(), "install", "components", "example-authservices", "standard-authservice.yaml"));
 
         Thread.sleep(60_000);
-        OperatorManager.getInstance().waitUntilOperatorReadyOlm(olmType);
+        operatorManager.waitUntilOperatorReadyOlm(olmType);
         Thread.sleep(30_000);
-    }
-
-    private void applySubscription(String installationNamespace, String catalogSourceName, String catalogNamespace, String csvName) throws IOException {
-        Path subscriptionFile = Files.createTempFile("subscription", ".yaml");
-        String subscription = Files.readString(Paths.get("custom-operator-registry", "subscription.yaml"));
-        Files.writeString(subscriptionFile,
-                subscription
-                    .replaceAll("\\$\\{OPERATOR_NAMESPACE}", installationNamespace)
-                    .replaceAll("\\$\\{CATALOG_SOURCE_NAME}", catalogSourceName)
-                    .replaceAll("\\$\\{CATALOG_NAMESPACE}", catalogNamespace)
-                    .replaceAll("\\$\\{CSV}", csvName));
-        KubeCMDClient.applyFromFile(installationNamespace, subscriptionFile);
-    }
-
-    private void deployCatalogSource(String catalogSourceName, String catalogNamespace, String customRegistryImageToUse) throws IOException {
-        Path catalogSourceFile = Files.createTempFile("catalogsource", ".yaml");
-        String catalogSource = Files.readString(Paths.get("custom-operator-registry", "catalog-source.yaml"));
-        Files.writeString(catalogSourceFile,
-                catalogSource
-                    .replaceAll("\\$\\{CATALOG_SOURCE_NAME}", catalogSourceName)
-                    .replaceAll("\\$\\{OPERATOR_NAMESPACE}", catalogNamespace)
-                    .replaceAll("\\$\\{REGISTRY_IMAGE}", customRegistryImageToUse));
-        KubeCMDClient.applyFromFile(catalogNamespace, catalogSourceFile);
     }
 
     private void upgradeEnmasseOLM(Path upgradeTemplates, String previousVersion) throws Exception {
         String newVersion = getVersionFromTemplateDir(upgradeTemplates);
-        String customRegistryImageToUse = buildPushCustomOperatorRegistry(infraNamespace, upgradeTemplates, newVersion);
+        String manifestsImage = getManifestsImage(upgradeTemplates, newVersion);
+        //update manifests image
+        operatorManager.olm().buildPushCustomOperatorRegistry(infraNamespace, manifestsImage);
 
-        String catalogSourceName = "enmasse-source";
-        String catalogNamespace = infraNamespace;
-        if (previousVersion.startsWith("0.30")) {
-            deployCatalogSource(catalogSourceName, catalogNamespace, customRegistryImageToUse);
-        } else {
-            kubernetes.deletePod(infraNamespace, Map.of("olm.catalogSource", "enmasse-source"));
-        }
+        //delete catalog pod to force update
+        kubernetes.deletePod(infraNamespace, Map.of("olm.catalogSource", "enmasse-source"));
 
         String csvName = getCsvName(upgradeTemplates, newVersion);
-
+        String catalogSourceName = "enmasse-source";
+        String catalogNamespace = infraNamespace;
         //update subscription to point to new catalog and to use latest csv
-        applySubscription(infraNamespace, catalogSourceName, catalogNamespace, csvName);
+        operatorManager.olm().applySubscription(infraNamespace, catalogSourceName, catalogNamespace, csvName);
 
         //should update
         Thread.sleep(300_000);
         checkImagesUpdated(getVersionFromTemplateDir(upgradeTemplates));
     }
 
-    private String buildPushCustomOperatorRegistry(String namespace, Path templateDir, String version) throws Exception {
-        String customRegistryImageToPush = environment.getClusterExternalImageRegistry()+"/"+namespace+"/systemtests-operator-registry:latest";
-        String customRegistryImageToUse = environment.getClusterInternalImageRegistry()+"/"+namespace+"/systemtests-operator-registry:latest";
-
-        String olmManifestsImage;
+    private String getManifestsImage(Path templateDir, String version) throws IOException, JsonProcessingException, JsonMappingException {
+        String manifestsImage;
         if (version.equals("1.3")) {
             String exampleCatalogSource = Files.readString(Paths.get(templateDir.toString(), "install", "components", "enmasse-operator", "050-Deployment-enmasse-operator.yaml"));
-            log.info(exampleCatalogSource);
-
-            log.info("Enmasse operator deployment found : {}", exampleCatalogSource!=null && !exampleCatalogSource.isEmpty());
             var yaml = new YAMLMapper().readTree(exampleCatalogSource);
             var spec = yaml.get("spec").get("template").get("spec");
-            log.info("Spec fields");
-            spec.fieldNames().forEachRemaining(log::info);
-            olmManifestsImage = spec.get("containers").get(0).get("image").asText();
+            manifestsImage = spec.get("containers").get(0).get("image").asText();
         } else {
             String exampleCatalogSource = Files.readString(Paths.get(templateDir.toString(), "install", "components", "example-olm", "catalog-source.yaml"));
             var tree = new YAMLMapper().readTree(exampleCatalogSource);
-            olmManifestsImage = tree.get("spec").get("image").asText();
+            manifestsImage = tree.get("spec").get("image").asText();
         }
+<<<<<<< HEAD
 
         olmManifestsImage = olmManifestsImage.replace(environment.getClusterInternalImageRegistry(), environment.getClusterExternalImageRegistry());
 
@@ -551,6 +493,9 @@ class UpgradeTest extends TestBase implements ITestIsolatedStandard {
         assertTrue(results != null && results.getRetCode(), "custom operator registry image build failed ");
 
         return customRegistryImageToUse;
+=======
+        return manifestsImage;
+>>>>>>> 424e7058b... WIP issue FSGROUP
     }
 
     private String getCsvName(Path templateDir, String version) throws Exception {
