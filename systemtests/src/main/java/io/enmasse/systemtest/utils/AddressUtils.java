@@ -289,7 +289,7 @@ public class AddressUtils {
         return notMatchingAddresses;
     }
 
-    public static void waitForAddressDeleted(Address address, TimeoutBudget timeoutBudget) throws Exception {
+    public static void waitForAddressDeleted(Address address, TimeoutBudget timeoutBudget) {
         Kubernetes kubernetes = Kubernetes.getInstance();
 
         TestUtils.waitUntilCondition(address + " match", phase -> {
