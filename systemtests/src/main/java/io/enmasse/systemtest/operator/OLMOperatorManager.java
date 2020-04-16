@@ -19,6 +19,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import io.enmasse.systemtest.Environment;
 import io.enmasse.systemtest.OLMInstallationType;
 import io.enmasse.systemtest.executor.Exec;
+import io.enmasse.systemtest.executor.ExecutionResultData;
 import io.enmasse.systemtest.logs.CustomLogger;
 import io.enmasse.systemtest.platform.KubeCMDClient;
 import io.enmasse.systemtest.platform.Kubernetes;
@@ -28,13 +29,11 @@ public class OLMOperatorManager {
 
     private static final Logger log = CustomLogger.getLogger();
     private Kubernetes kube = Kubernetes.getInstance();
-    private String productName;
     private String clusterExternalImageRegistry;
     private String clusterInternalImageRegistry;
     private static OLMOperatorManager instance;
 
     private OLMOperatorManager() {
-        productName = Environment.getInstance().getProductName();
         clusterExternalImageRegistry = Environment.getInstance().getClusterExternalImageRegistry();
         clusterInternalImageRegistry = Environment.getInstance().getClusterInternalImageRegistry();
     }
@@ -105,9 +104,17 @@ public class OLMOperatorManager {
 
         String olmManifestsImage = manifestsImage.replace(clusterInternalImageRegistry, clusterExternalImageRegistry);
 
-        var results = Exec.execute(Arrays.asList("make", "-C", "custom-operator-registry", "FROM="+olmManifestsImage, "TAG="+customRegistryImageToPush), true);
-
-        assertTrue(results.getRetCode(), "custom operator registry image build failed ");
+        int retries = 5;
+        ExecutionResultData results = null;
+        while (retries > 0) {
+            results = Exec.execute(Arrays.asList("make", "-C", "custom-operator-registry", "FROM="+olmManifestsImage, "TAG="+customRegistryImageToPush), true);
+            if(results.getRetCode()) {
+                return customRegistryImageToUse;
+            }
+            Thread.sleep(1000);
+            retries--;
+        }
+        assertTrue(results != null && results.getRetCode(), "custom operator registry image build failed ");
 
         return customRegistryImageToUse;
     }

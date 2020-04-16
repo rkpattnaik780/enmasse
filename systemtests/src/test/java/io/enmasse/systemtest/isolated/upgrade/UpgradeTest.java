@@ -19,7 +19,6 @@ import io.enmasse.systemtest.bases.isolated.ITestIsolatedStandard;
 import io.enmasse.systemtest.condition.OpenShift;
 import io.enmasse.systemtest.condition.OpenShiftVersion;
 import io.enmasse.systemtest.executor.Exec;
-import io.enmasse.systemtest.executor.ExecutionResultData;
 import io.enmasse.systemtest.logs.CustomLogger;
 import io.enmasse.systemtest.logs.GlobalLogCollector;
 import io.enmasse.systemtest.messagingclients.AbstractClient;
@@ -476,26 +475,7 @@ class UpgradeTest extends TestBase implements ITestIsolatedStandard {
             var tree = new YAMLMapper().readTree(exampleCatalogSource);
             manifestsImage = tree.get("spec").get("image").asText();
         }
-<<<<<<< HEAD
-
-        olmManifestsImage = olmManifestsImage.replace(environment.getClusterInternalImageRegistry(), environment.getClusterExternalImageRegistry());
-
-        int retries = 5;
-        ExecutionResultData results = null;
-        while (retries > 0) {
-            results = Exec.execute(Arrays.asList("make", "-C", "custom-operator-registry", "FROM="+olmManifestsImage, "TAG="+customRegistryImageToPush), true);
-            if(results.getRetCode()) {
-                return customRegistryImageToUse;
-            }
-            Thread.sleep(1000);
-            retries--;
-        }
-        assertTrue(results != null && results.getRetCode(), "custom operator registry image build failed ");
-
-        return customRegistryImageToUse;
-=======
         return manifestsImage;
->>>>>>> 424e7058b... WIP issue FSGROUP
     }
 
     private String getCsvName(Path templateDir, String version) throws Exception {
