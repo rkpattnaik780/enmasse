@@ -2000,23 +2000,23 @@ function getMockDownstreamStrategy(strategyType) {
       },
       addresses: {
         Telemetry: {
-          name: "telemetry-c127edbe-0242ac130003",
+          name: "ganymede",
           plan: "standard-small-queue",
           type: "queue"
         },
         Event: {
-          name: "event-c127edbe-0242ac130003",
+          name: "europa",
           plan: "standard-small-queue",
           type: "queue"
         },
         Command: [
           {
-            name: "command-c127edbe-0242ac130003",
+            name: "thebe",
             plan: "standard-small-queue",
             type: "queue"
           },
           {
-            name: "command-receiver",
+            name: "callisto",
             plan: "standard-small-queue",
             type: "queue"
           }

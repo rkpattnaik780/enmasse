@@ -19,7 +19,7 @@ import {
   Dropdown
 } from "@patternfly/react-core";
 import { StyleSheet, css } from "aphrodite";
-import { DropdownWithToggle } from "components";
+import { DropdownWithToggle, DropdownWithKebabToggle } from "components";
 import { compareObject, createDeepCopy } from "utils";
 import { IDeviceFilterCriteria } from "modules/iot-device";
 import { AddCriteria } from "./AddCriteria";
@@ -64,12 +64,14 @@ export interface IDeviceFilterProps {
   filter: IDeviceFilter;
   setFilter: (filter: IDeviceFilter) => void;
   runFilter?: (filter: IDeviceFilter) => void;
+  resetFilter?: () => void;
 }
 
 const DeviceFilter: React.FunctionComponent<IDeviceFilterProps> = ({
   filter,
   setFilter,
-  runFilter
+  runFilter,
+  resetFilter
 }) => {
   const [lastAppliedFilter, setLastAppliedFilter] = useState<IDeviceFilter[]>([
     getInitialFilter()
@@ -77,16 +79,20 @@ const DeviceFilter: React.FunctionComponent<IDeviceFilterProps> = ({
   const [isKebabOpen, setIsKebabOpen] = useState<boolean>(false);
   const [isRedoEnabled, setIsRedoEnabled] = useState<boolean>(false);
   const onClearFilter = () => {
-    setFilter(getInitialFilter());
+    resetFilter && resetFilter();
     setIsKebabOpen(false);
   };
-  const onRedoFilter = () => {
+  const onRedoFilter = async () => {
     // redoFilter();
     const lastFilterLength = lastAppliedFilter.length;
     const lastFilter = createDeepCopy({
       ...lastAppliedFilter[lastFilterLength - 2]
     });
-    setFilter(lastFilter);
+    await setFilter({ ...lastFilter });
+    console.log(lastFilter);
+    runFilter && runFilter(lastFilter);
+    console.log(lastFilter);
+    setFilter({ ...lastFilter });
     const filterList = [...lastAppliedFilter];
     filterList.splice(lastFilterLength - 2, 1);
     setIsRedoEnabled(false);
@@ -121,6 +127,7 @@ const DeviceFilter: React.FunctionComponent<IDeviceFilterProps> = ({
     lastFilter.push(filterCopy);
     setIsRedoEnabled(true);
     setLastAppliedFilter(lastFilter);
+    console.log(filter);
     runFilter && runFilter(filter);
   };
 
@@ -163,16 +170,24 @@ const DeviceFilter: React.FunctionComponent<IDeviceFilterProps> = ({
       </SplitItem>
       <SplitItem>&nbsp;</SplitItem>
       <SplitItem>
-        <Dropdown
+        <DropdownWithKebabToggle
           id="filter-kebab-dropdown"
-          position={DropdownPosition.left}
-          isPlain
+          isPlain={true}
+          toggleId="adheader-kebab"
           dropdownItems={kebabDropdownItems}
           isOpen={isKebabOpen}
+          position={DropdownPosition.left}
+        />
+        {/* <Dropdown
+          
+          
+          isPlain
+          
+          
           toggle={
             <KebabToggle id="filter-kebab-toggle" onToggle={onKebabToggle} />
           }
-        />
+        /> */}
       </SplitItem>
     </Split>
   );

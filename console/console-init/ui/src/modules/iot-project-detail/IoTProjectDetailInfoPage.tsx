@@ -9,21 +9,129 @@ import {
 import { action } from "@storybook/addon-actions";
 import { IAdapterConfig, IAdapter } from "components/AdapterList";
 import { Protocols } from "constant";
+import { useParams } from "react-router";
+import { useQuery } from "@apollo/react-hooks";
+import { RETURN_IOT_PROJECTS } from "graphql-module/queries/iot_project";
+import { IIoTProjectsResponse } from "schema/iot_project";
 
 export default function IoTProjectDetailInfoPage() {
-  const eventAddresses: Array<string> = ["event_address", "event_address1"];
-  const telemetryAddresses: Array<string> = ["telemetry_address"];
-  const commandAddresses: Array<string> = ["command_address"];
+  const { projectname } = useParams();
+
+  const queryResolver = `
+  iotProjects {
+    metadata{
+      namespace
+    }
+    spec {
+      downstreamStrategy {
+        ... on ManagedDownstreamStrategy_iot_enmasse_io_v1alpha1 {
+          addressSpace {
+            name
+          }
+          addresses {
+            Telemetry {
+              name
+            }
+            Event {
+              name
+            }
+            Command {
+              name
+            }
+          }
+        }
+      }
+    }
+    status {
+      phase
+      phaseReason
+      tenantName
+      downstreamEndpoint {
+        host
+        port
+        credentials {
+          username
+          password
+        }
+        tls
+        certificate
+      }
+    }
+    endpoints {
+      name
+      url
+      host
+    }
+  }
+`;
+
+  const { data } = useQuery<IIoTProjectsResponse>(
+    RETURN_IOT_PROJECTS({ projectname }, queryResolver)
+  );
+
+  console.log(data);
+
+  const {
+    metadata: { namespace },
+    spec: {
+      downstreamStrategy: {
+        addressSpace: { name: addressSpace },
+        addresses: {
+          Telemetry: { name: telemetryAddress },
+          Event: { name: eventAddress },
+          Command: commandAddresses
+        }
+      }
+    },
+    status: {
+      downstreamEndpoint: {
+        credentials: { username, password }
+      }
+    }
+  } = data?.allProjects?.iotProjects[0] || {
+    spec: {
+      downstreamStrategy: {
+        addressSpace: {
+          name: ""
+        },
+        addresses: {
+          Telemetry: {
+            name: ""
+          },
+          Event: {
+            name: ""
+          },
+          Command: [{ name: "" }]
+        }
+      }
+    },
+    metadata: {
+      namespace: ""
+    },
+    status: {
+      downstreamEndpoint: {
+        host: "",
+        port: 0,
+        credentials: {
+          username: "",
+          password: ""
+        },
+        tls: false,
+        certificate: ""
+      }
+    }
+  };
 
   const messaging: IIoTMessagingObject = {
     url: "https://http.bosch-iot-hub.com",
-    username: "username",
-    password: "password",
-    addressSpace: "devops-iottest",
-    eventsAddresses: eventAddresses,
-    telemetryAddresses: telemetryAddresses,
-    commandAddresses: commandAddresses
+    username,
+    password,
+    addressSpace,
+    eventAddress,
+    telemetryAddress,
+    commandAddresses: []
   };
+
   const httpAdapter: IAdapterConfig = {
     url: "https://http.bosch-iot-hub.com"
   };
@@ -48,17 +156,18 @@ export default function IoTProjectDetailInfoPage() {
     <Grid>
       <GridItem span={6}>
         <GeneralInfo
-          addressSpace={"devops_iot"}
-          eventAddresses={eventAddresses}
-          telemetryAddresses={telemetryAddresses}
-          commandAddresses={commandAddresses}
+          addressSpace={addressSpace}
+          eventAddress={eventAddress}
+          telemetryAddress={telemetryAddress}
+          commandAddresses={commandAddresses.map((as: any) => as.name)}
           maxConnection={50000}
           dataVolume={50000}
           startDate={"start Date"}
           endDate={"end Date"}
-          namespace={"namespace"}
+          namespace={namespace}
         />
         <DeviceRegistationManagement
+          // To be replaced with the OAuth token
           token={"username"}
           endpoiuntUrl={"https://http.bosch-iot-hub.com"}
         />

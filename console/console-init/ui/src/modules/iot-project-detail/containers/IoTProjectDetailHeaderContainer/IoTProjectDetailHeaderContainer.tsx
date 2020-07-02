@@ -16,6 +16,7 @@ interface IIoTProjectDetailHeaderContainerProps {
 export const IoTProjectDetailHeaderContainer: React.FC<IIoTProjectDetailHeaderContainerProps> = ({
   projectName
 }) => {
+  // const [setDeleteIoTProjectQueryVariables] = useMutationQuery(DELETE_IOT_PROJECT, ["allProjects"]);
   const { data } = useQuery<IIoTProjectsResponse>(
     RETURN_IOT_PROJECTS({ projectName })
   );
@@ -32,7 +33,15 @@ export const IoTProjectDetailHeaderContainer: React.FC<IIoTProjectDetailHeaderCo
   };
 
   // TODO: HANDLE AFTER MOCK IS READY
-  const handleDelete = () => {};
+  const handleDelete = () => {
+    //   const queryVariable = {
+    //     as: {
+    //       name: name,
+    //       namespace: namespace
+    //     }
+    //   };
+    //   setDeleteIoTProjectQueryVariables(queryVariable);
+  };
 
   // TODO: HANDLE AFTER MOCK IS READY
   const handleChangeEnabled = () => {};

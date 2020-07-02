@@ -289,6 +289,7 @@ export default function DeviceListPage() {
               filter={filter}
               setFilter={setFilter}
               runFilter={runFilter}
+              resetFilter={resetFilter}
             />
           </CardBody>
         </Card>
