@@ -351,6 +351,7 @@ const typeDefs = gql`
   type Port_enmasse_io_v1beta1 {
     name: String!
     port: Int!
+    roll: Int!
   }
 
   type AddressSpec_enmasse_io_v1beta1 {
