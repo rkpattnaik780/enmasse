@@ -1,0 +1,17 @@
+# schema: https://raw.githubusercontent.com/rkpattnaik780/enmasse/master/console/console-init/ui/mock-console-server/schema.js
+# schema: github:ajaypratap003/enmasse#upgrade-yarn:console/console-init/ui/mock-console-server/schema.graphql
+schema: github:rkpattnaik780/enmasse#add_use_patternfly:/**/*.graphql
+
+# schema: github:user/repo#branchName:path/to/file.graphql
+
+
+# schema: ./mock-console-server/schema.graphql
+# schema: github:rkpattnaik780/enmasse#master:console/console-init/ui/mock-console-server/schema.js
+documents: ''
+extensions:
+  codegen:
+    generates:
+      ./generated-frontend.ts:
+        plugins:
+          - typescript
+          - typescript-react-apollo
