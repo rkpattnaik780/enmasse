@@ -1,0 +1,14 @@
+const { gql } = require('apollo-server');
+
+const typeDefs = gql`
+type Topic {
+  name: String!
+  partitions: Int
+  replicas: Int
+}
+
+type Query {
+  topic(name: String): Topic
+  topics: [Topic]
+}
+`;
